@@ -26,28 +26,9 @@ function App() {
   const [answer, setAnswer] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [canGoNext, setCanGoNext] = useState(false);
 
   const activeQuestion = questions[activeIndex];
-  const activeEntry = entries[activeIndex] ?? { question: activeQuestion ?? '', answer: '' };
-
   const progress = useMemo(() => `${Math.min(activeIndex + 1, 5)}/5`, [activeIndex]);
-
-  const scoredEntries = useMemo(() => entries.filter((entry) => entry.feedback), [entries]);
-
-  const averageScore = useMemo(() => {
-    if (!scoredEntries.length) return 0;
-    const total = scoredEntries.reduce((sum, item) => sum + (item.feedback?.score ?? 0), 0);
-    return Number((total / scoredEntries.length).toFixed(1));
-  }, [scoredEntries]);
-
-  const averageIdealAnswer = useMemo(() => {
-    if (!scoredEntries.length) return '';
-    return scoredEntries
-      .map((item, idx) => `Q${idx + 1}: ${item.feedback?.idealAnswer ?? ''}`)
-      .join(' ')
-      .slice(0, 420);
-  }, [scoredEntries]);
 
   const startInterview = async () => {
     if (!role.trim() || !experience.trim()) {
@@ -63,7 +44,6 @@ function App() {
       setEntries(generated.slice(0, 5).map((question) => ({ question, answer: '' })));
       setActiveIndex(0);
       setAnswer('');
-      setCanGoNext(false);
       setPage('interview');
     } catch {
       setError('Unable to start interview right now. Please try again.');
@@ -73,7 +53,7 @@ function App() {
   };
 
   const submitAnswer = async () => {
-    if (!answer.trim() || !activeQuestion || canGoNext) return;
+    if (!answer.trim() || !activeQuestion) return;
 
     setLoading(true);
     setError('');
@@ -87,25 +67,20 @@ function App() {
         return copy;
       });
 
-      setCanGoNext(true);
+      setAnswer('');
+
+      if (activeIndex >= questions.length - 1) {
+        setPage('done');
+      } else {
+        setTimeout(() => {
+          setActiveIndex((prev) => prev + 1);
+        }, 250);
+      }
     } catch {
       setError('We could not evaluate this answer. Please retry in a moment.');
     } finally {
       setLoading(false);
     }
-  };
-
-  const goToNextQuestion = () => {
-    const isLast = activeIndex >= questions.length - 1;
-    if (isLast) {
-      setPage('done');
-      return;
-    }
-
-    setActiveIndex((prev) => prev + 1);
-    setAnswer('');
-    setCanGoNext(false);
-    setError('');
   };
 
   const restart = () => {
@@ -115,7 +90,6 @@ function App() {
     setActiveIndex(0);
     setAnswer('');
     setError('');
-    setCanGoNext(false);
   };
 
   return (
@@ -183,14 +157,11 @@ function App() {
             )}
             {error && <p className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">{error}</p>}
             <ChatBox
-              entry={activeEntry}
+              entries={entries.slice(0, activeIndex + 1)}
               answer={answer}
               loading={loading}
-              canGoNext={canGoNext}
-              isLastQuestion={activeIndex === questions.length - 1}
               onAnswerChange={setAnswer}
               onSubmit={submitAnswer}
-              onNext={goToNextQuestion}
             />
           </section>
         )}
@@ -198,13 +169,7 @@ function App() {
         {page === 'done' && (
           <section className="premium-card animate-fadeInUp space-y-5 p-6 text-center sm:p-8">
             <h2 className="text-2xl font-bold">Interview Completed 🎉</h2>
-            <p className="text-zinc-300">Great work! Review your average performance and ideal answer summary below.</p>
-            <div className="rounded-2xl border border-ember/30 bg-zinc-950/70 p-4 text-left">
-              <p className="text-sm text-zinc-400">Average score</p>
-              <p className="mt-1 text-3xl font-bold text-ember">{averageScore}/10</p>
-              <p className="mt-3 text-sm text-zinc-400">Average ideal answer summary</p>
-              <p className="mt-1 text-sm text-zinc-200">{averageIdealAnswer || 'No answer summary available.'}</p>
-            </div>
+            <p className="text-zinc-300">Great work! Review your feedback and run another round to improve even more.</p>
             <button
               onClick={restart}
               className="rounded-xl bg-ember px-5 py-3 font-semibold text-white transition hover:-translate-y-0.5 hover:bg-orange-500"
