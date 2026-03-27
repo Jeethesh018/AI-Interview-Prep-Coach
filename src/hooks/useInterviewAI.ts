@@ -77,7 +77,7 @@ Return ONLY JSON with this schema:
   "score": number between 1 and 10,
   "strengths": string[],
   "improvements": string[],
-  "idealAnswer": string
+  "idealAnswer": string with bullet-point style tips separated by periods
 }`;
 
     try {

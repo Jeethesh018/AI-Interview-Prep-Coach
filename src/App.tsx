@@ -18,19 +18,44 @@ function App() {
   const { generateQuestions, evaluateAnswer } = useInterviewAI();
 
   const [page, setPage] = useState<Page>('home');
-  const [role, setRole] = useState('React Developer');
-  const [experience, setExperience] = useState('2');
+  const [role, setRole] = useState('');
+  const [experience, setExperience] = useState('');
   const [questions, setQuestions] = useState<string[]>([]);
   const [entries, setEntries] = useState<InterviewEntry[]>([]);
   const [activeIndex, setActiveIndex] = useState(0);
   const [answer, setAnswer] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [canGoNext, setCanGoNext] = useState(false);
+  const [signedIn, setSignedIn] = useState(false);
 
   const activeQuestion = questions[activeIndex];
+  const activeEntry = entries[activeIndex] ?? { question: activeQuestion ?? '', answer: '' };
+
   const progress = useMemo(() => `${Math.min(activeIndex + 1, 5)}/5`, [activeIndex]);
 
+  const scoredEntries = useMemo(() => entries.filter((entry) => entry.feedback), [entries]);
+
+  const averageScore = useMemo(() => {
+    if (!scoredEntries.length) return 0;
+    const total = scoredEntries.reduce((sum, item) => sum + (item.feedback?.score ?? 0), 0);
+    return Number((total / scoredEntries.length).toFixed(1));
+  }, [scoredEntries]);
+
+  const averageIdealAnswer = useMemo(() => {
+    if (!scoredEntries.length) return '';
+    return scoredEntries
+      .map((item, idx) => `Q${idx + 1}: ${item.feedback?.idealAnswer ?? ''}`)
+      .join(' ')
+      .slice(0, 420);
+  }, [scoredEntries]);
+
   const startInterview = async () => {
+    if (!signedIn) {
+      setError('Please continue with Google first before starting the interview.');
+      return;
+    }
+
     if (!role.trim() || !experience.trim()) {
       setError('Please provide both role and experience to start.');
       return;
@@ -44,6 +69,7 @@ function App() {
       setEntries(generated.slice(0, 5).map((question) => ({ question, answer: '' })));
       setActiveIndex(0);
       setAnswer('');
+      setCanGoNext(false);
       setPage('interview');
     } catch {
       setError('Unable to start interview right now. Please try again.');
@@ -53,7 +79,7 @@ function App() {
   };
 
   const submitAnswer = async () => {
-    if (!answer.trim() || !activeQuestion) return;
+    if (!answer.trim() || !activeQuestion || canGoNext) return;
 
     setLoading(true);
     setError('');
@@ -67,20 +93,25 @@ function App() {
         return copy;
       });
 
-      setAnswer('');
-
-      if (activeIndex >= questions.length - 1) {
-        setPage('done');
-      } else {
-        setTimeout(() => {
-          setActiveIndex((prev) => prev + 1);
-        }, 250);
-      }
+      setCanGoNext(true);
     } catch {
       setError('We could not evaluate this answer. Please retry in a moment.');
     } finally {
       setLoading(false);
     }
+  };
+
+  const goToNextQuestion = () => {
+    const isLast = activeIndex >= questions.length - 1;
+    if (isLast) {
+      setPage('done');
+      return;
+    }
+
+    setActiveIndex((prev) => prev + 1);
+    setAnswer('');
+    setCanGoNext(false);
+    setError('');
   };
 
   const restart = () => {
@@ -90,18 +121,33 @@ function App() {
     setActiveIndex(0);
     setAnswer('');
     setError('');
+    setCanGoNext(false);
   };
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-zinc-950 via-zinc-950 to-zinc-900 px-4 py-8 text-zinc-100 sm:px-6">
       <div className="mx-auto max-w-3xl">
         <header className="mb-8 text-center animate-fadeInUp">
-          <h1 className="text-2xl font-bold tracking-tight sm:text-4xl">AI Interview Prep Coach</h1>
-          <p className="mt-2 text-sm text-zinc-400 sm:text-base">Mobile-first prep with live AI feedback powered by Puter.js.</p>
+          <h1 className="text-2xl font-bold tracking-tight sm:text-4xl">AI Mock Interview</h1>
+          <p className="mt-2 text-sm text-zinc-400 sm:text-base">Real interview style questions with sharp, bullet-point feedback.</p>
         </header>
 
         {page === 'home' && (
           <section className="premium-card animate-fadeInUp space-y-5 p-5 sm:p-8">
+            <button
+              onClick={() => {
+                setSignedIn(true);
+                setError('');
+              }}
+              className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-sm font-semibold transition hover:border-ember hover:text-ember"
+            >
+              {signedIn ? '✅ Signed in with Google (Demo)' : 'Continue with Google'}
+            </button>
+
+            <p className="rounded-xl border border-zinc-800 bg-zinc-950/70 px-3 py-2 text-xs text-zinc-400">
+              To truly save interviews in your Firebase account, add Google Auth + Firestore config. I will need your Firebase project details.
+            </p>
+
             <div>
               <label className="mb-2 block text-sm font-medium text-zinc-300">Role</label>
               <input
@@ -157,19 +203,28 @@ function App() {
             )}
             {error && <p className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">{error}</p>}
             <ChatBox
-              entries={entries.slice(0, activeIndex + 1)}
+              entry={activeEntry}
               answer={answer}
               loading={loading}
+              canGoNext={canGoNext}
+              isLastQuestion={activeIndex === questions.length - 1}
               onAnswerChange={setAnswer}
               onSubmit={submitAnswer}
+              onNext={goToNextQuestion}
             />
           </section>
         )}
 
         {page === 'done' && (
           <section className="premium-card animate-fadeInUp space-y-5 p-6 text-center sm:p-8">
-            <h2 className="text-2xl font-bold">Interview Completed 🎉</h2>
-            <p className="text-zinc-300">Great work! Review your feedback and run another round to improve even more.</p>
+            <h2 className="text-2xl font-bold">Thank you for taking your interview ✅</h2>
+            <p className="text-zinc-300">If you want another interview like this, click Start Again.</p>
+            <div className="rounded-2xl border border-ember/30 bg-zinc-950/70 p-4 text-left">
+              <p className="text-sm text-zinc-400">Average score</p>
+              <p className="mt-1 text-3xl font-bold text-ember">{averageScore}/10</p>
+              <p className="mt-3 text-sm text-zinc-400">Average ideal answer summary</p>
+              <p className="mt-1 text-sm text-zinc-200">{averageIdealAnswer || 'No answer summary available.'}</p>
+            </div>
             <button
               onClick={restart}
               className="rounded-xl bg-ember px-5 py-3 font-semibold text-white transition hover:-translate-y-0.5 hover:bg-orange-500"
